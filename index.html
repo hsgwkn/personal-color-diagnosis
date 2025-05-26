@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>パーソナルカラー診断</title>
+  <script defer src="https://unpkg.com/face-api.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    #preview { max-width: 100%; max-height: 400px; }
+    #result { margin-top: 1rem; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <h1>パーソナルカラー診断</h1>
+  <input type="file" id="file-input" accept="image/*" />
+  <br /><br />
+  <img id="preview" />
+  <br />
+  <button id="analyze-button">診断をはじめる</button>
+  <div id="result"></div>
+  <script>
+    const preview = document.getElementById('preview');
+    const fileInput = document.getElementById('file-input');
+    const result = document.getElementById('result');
+    async function loadModels() {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+    }
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+      } else { h = s = 0; }
+      return { h: h * 360, s, l };
+    }
+    function classifyTone(r, g, b) {
+      const { h, l } = rgbToHsl(r, g, b);
+      if (h < 50) return l > 0.6 ? "イエベ春（Spring）" : "イエベ秋（Autumn）";
+      else return l > 0.6 ? "ブルベ夏（Summer）" : "ブルベ冬（Winter）";
+    }
+    document.getElementById('analyze-button').addEventListener('click', async () => {
+      if (!preview.src) return alert("画像をアップロードしてください");
+      const detection = await faceapi.detectSingleFace(preview, new faceapi.TinyFaceDetectorOptions());
+      if (!detection) return alert("顔が認識できませんでした");
+      const { x, y, width, height } = detection.box;
+      const cx = Math.floor(x + width / 2);
+      const cy = Math.floor(y + height / 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = preview.width;
+      canvas.height = preview.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+      const pixel = ctx.getImageData(cx, cy, 1, 1).data;
+      const [r, g, b] = pixel;
+      const tone = classifyTone(r, g, b);
+      result.textContent = `診断結果：${tone}`;
+    });
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => { preview.src = reader.result; };
+        reader.readAsDataURL(file);
+      }
+    });
+    loadModels();
+  </script>
+</body>
+</html>
